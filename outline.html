@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Screenplay Notecard Board</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root{
+      --bg-0: #0b1220;   /* page bg */
+      --bg-1: #0f172a;   /* board bg */
+      --bg-2: #111827;   /* inputs / panels */
+      --bg-3: #1f2937;   /* modal bg */
+      --text-0: #e5e7eb; /* main text */
+      --text-1: #cbd5e1; /* secondary text */
+      --text-2: #94a3b8; /* muted text */
+      --muted: #334155;  /* borders */
+      --muted-2: #374151; /* darker border */
+      --brand: #10b981;  /* emerald */
+      --brand-2: #059669;/* emerald hover */
+      --danger-bg: #7f1d1d;
+      --danger-border: #ef4444;
+      --danger-text: #fecaca;
+      --placeholder: #6b7280;
+
+      --marker-bg: rgba(16,185,129,.14);
+      --marker-border: #10b981;
+      --marker-pill-bg: rgba(16,185,129,.2);
+      --marker-pill-text: #a7f3d0;
+      --marker-pill-border: rgba(16,185,129,.4);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 0%, #0d1630 0%, var(--bg-0) 50%) fixed,
+                  linear-gradient(135deg, var(--bg-0) 0%, #0c1326 100%) fixed;
+      color: var(--text-0);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    .header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 18px; gap: 16px;
+    }
+
+    .header h1 { font-size: 1.8rem; color: var(--text-0); margin-bottom: 6px; }
+    .header p { color: var(--text-2); font-size: 0.95rem; }
+
+    .header-actions {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end;
+    }
+
+    .project-title, .cols-input {
+      padding: 10px; border: 2px solid var(--muted); border-radius: 8px;
+      font-size: 14px; background: var(--bg-2); color: var(--text-0);
+    }
+    .project-title::placeholder{ color: var(--placeholder); }
+
+    .cols-wrapper {
+      display: inline-flex; align-items: center; gap: 8px; color: var(--text-1); font-size: 14px;
+      background: var(--bg-2); border: 2px solid var(--muted); border-radius: 8px; padding: 8px 10px;
+    }
+    .cols-input { width: 70px; text-align: center; }
+
+    .controls {
+      display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-end;
+    }
+
+    .input-group { flex: 1; }
+    .input-group input, .input-group textarea {
+      width: 100%; padding: 10px; border: 2px solid var(--muted); border-radius: 8px;
+      font-size: 14px; font-family: inherit; background: var(--bg-2); color: var(--text-0);
+    }
+    .input-group input::placeholder, .input-group textarea::placeholder { color: var(--placeholder); }
+    .input-group textarea { resize: vertical; min-height: 40px; }
+
+    .btn {
+      padding: 10px 12px; border: 1px solid transparent; border-radius: 8px; font-size: 14px; font-weight: 500;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.15s ease;
+      color: var(--text-0);
+    }
+    .btn-primary { background: var(--brand); border-color: var(--brand); color: #00110b; }
+    .btn-primary:hover { background: var(--brand-2); border-color: var(--brand-2); color: #00110b; }
+    .btn-primary:disabled { background: #1f3b31; border-color: #1f3b31; color: #0a1f1a; cursor: not-allowed; }
+
+    .btn-secondary { background: var(--bg-2); color: var(--text-0); border-color: var(--muted); }
+    .btn-secondary:hover { background: #141c2c; border-color: var(--muted-2); }
+
+    .btn-danger { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
+    .btn-danger:hover { background: #991b1b; }
+
+    .toolbar-row {
+      display: flex; gap: 10px; align-items: center; justify-content: flex-start; margin-bottom: 12px; flex-wrap: wrap;
+    }
+
+    .board {
+      position: relative; background: var(--bg-1); border: 2px dashed var(--muted); border-radius: 12px;
+      height: 70vh; overflow: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .canvas {
+      position: relative;
+      min-height: 100%;
+      min-width: 100%;
+    }
+
+    .drop-indicator {
+      position: absolute;
+      width: 260px; height: 180px;
+      border: 2px dashed var(--brand);
+      border-radius: 10px;
+      background: rgba(16,185,129,.06);
+      box-shadow: inset 0 0 0 2px rgba(16,185,129,.05);
+      pointer-events: none;
+      transition: left 120ms ease, top 120ms ease, opacity 100ms ease;
+      opacity: 0;
+    }
+    .drop-indicator.show { opacity: 1; }
+
+    .empty-state {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; color: var(--text-2); pointer-events: none;
+    }
+    .empty-state .icon { font-size: 4rem; margin-bottom: 16px; }
+
+    .notecard {
+      position: absolute;
+      width: 260px; height: 180px;
+      background: #ffffff; border: 2px solid #e2e8f0; border-radius: 10px;
+      padding: 12px 12px 10px 12px; cursor: move; user-select: none; box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+      transition: left 120ms ease, top 120ms ease, transform 0.12s ease, box-shadow 0.12s ease;
+      z-index: 10; color: #111827; overflow: hidden;
+    }
+    .notecard:hover { box-shadow: 0 14px 36px rgba(0,0,0,0.35); }
+    .notecard.dragging { transform: rotate(2deg) scale(1.05); z-index: 50; box-shadow: 0 20px 44px rgba(0,0,0,0.45); }
+
+    .notecard-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
+    .notecard-title { font-weight: 700; color: #0f172a; font-size: 14px; flex: 1; margin-right: 8px; word-wrap: break-word; letter-spacing: .2px; line-height: 1.15; }
+    .notecard-actions { display: flex; gap: 4px; }
+    .icon-btn {
+      width: 26px; height: 26px; border: none; background: none; cursor: pointer; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center; color: #475569; transition: all 0.15s;
+    }
+    .icon-btn:hover { background: rgba(15, 23, 42, 0.06); }
+    .icon-btn.delete:hover { color: #dc2626; }
+
+    .notecard-content {
+      font-size: 13px; color: #334155; line-height: 1.35; white-space: pre-wrap; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+    }
+    .content-line { white-space: pre-wrap; }
+    .content-line.marker-line {
+      background: var(--marker-bg);
+      border-left: 3px solid var(--marker-border);
+      padding-left: 6px;
+      border-radius: 4px;
+      margin: 2px 0;
+    }
+
+    .markers {
+      margin-top: 8px;
+      display: flex; gap: 6px; align-items: center;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .marker-pill {
+      font-size: 11px;
+      line-height: 1;
+      padding: 6px 8px;
+      background: var(--marker-pill-bg);
+      color: var(--marker-pill-text);
+      border: 1px solid var(--marker-pill-border);
+      border-radius: 999px;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+
+    /* Color accents for cards (default is white) */
+    .color-white { background: #ffffff; border-color: #e2e8f0; }
+    .color-yellow { background: #fef3c7; border-color: #fcd34d; }
+    .color-blue   { background: #dbeafe; border-color: #93c5fd; }
+    .color-green  { background: #d1fae5; border-color: #6ee7b7; }
+    .color-pink   { background: #fce7f3; border-color: #f9a8d4; }
+    .color-purple { background: #e9d5ff; border-color: #c4b5fd; }
+    .color-orange { background: #fed7aa; border-color: #fdba74; }
+    .color-red    { background: #fecaca; border-color: #fca5a5; }
+    .color-teal   { background: #ccfbf1; border-color: #5eead4; }
+
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; }
+    .modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-content {
+      background: var(--bg-3); padding: 24px; border-radius: 12px; width: 90%; max-width: 560px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4); color: var(--text-0); border: 1px solid var(--muted);
+    }
+    .modal-header { margin-bottom: 18px; }
+    .modal-header h3 { font-size: 1.15rem; color: var(--text-0); }
+    .modal-body { margin-bottom: 16px; }
+    .modal-body input, .modal-body textarea {
+      width: 100%; padding: 10px; border: 2px solid var(--muted); border-radius: 8px; font-size: 14px;
+      margin-bottom: 12px; background: var(--bg-2); color: var(--text-0);
+    }
+    .modal-body input::placeholder, .modal-body textarea::placeholder{ color: var(--placeholder); }
+    .modal-footer { display: flex; gap: 12px; }
+
+    .color-picker {
+      position: absolute; background: var(--bg-3); border: 1px solid var(--muted); border-radius: 10px; padding: 10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.4); z-index: 100; display: none;
+    }
+    .color-picker.show { display: block; }
+    .color-picker-label { font-size: 12px; color: var(--text-1); margin-bottom: 6px; }
+    .color-option {
+      width: 24px; height: 24px; border-radius: 6px; margin: 3px; cursor: pointer; border: 2px solid transparent; display: inline-block;
+    }
+    .color-option.white { background: #ffffff; border-color: #e2e8f0; }
+    .color-option.yellow { background: #fef3c7; }
+    .color-option.blue   { background: #dbeafe; }
+    .color-option.green  { background: #d1fae5; }
+    .color-option.pink   { background: #fce7f3; }
+    .color-option.purple { background: #e9d5ff; }
+    .color-option.orange { background: #fed7aa; }
+    .color-option.red    { background: #fecaca; }
+    .color-option.teal   { background: #ccfbf1; }
+    .color-option:hover { outline: 2px solid var(--muted-2); outline-offset: 0; }
+
+    .tip { text-align: center; color: var(--text-2); font-size: 14px; margin-top: 14px; }
+
+    @media (max-width: 768px) {
+      .controls { flex-direction: column; }
+      .header { flex-direction: column; align-items: stretch; }
+      .header-actions { justify-content: stretch; }
+      .project-title { width: 100%; min-width: 0; }
+      .btn { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>Screenplay Notecard Board</h1>
+        <p>Organize your scenes, characters, and plot points</p>
+      </div>
+      <div class="header-actions">
+        <input id="projectTitle" class="project-title" type="text" placeholder="Project Title (used in export)">
+        <div class="cols-wrapper">
+          <span>Cards/row</span>
+          <input id="colsInput" class="cols-input" type="number" min="1" max="12" step="1" />
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="input-group">
+        <input type="text" id="titleInput" placeholder="Notecard title (try 'INT. COFFEE SHOP - DAY')">
+      </div>
+      <div class="input-group">
+        <textarea id="contentInput" placeholder="Content or notes... Lines starting with '=' are tracked." rows="1"></textarea>
+      </div>
+      <button class="btn btn-primary" id="addBtn" disabled>➕ Add Card</button>
+    </div>
+
+    <div class="toolbar-row">
+      <button class="btn btn-secondary" id="exportBtn" disabled>📥 Export .fountain</button>
+      <button class="btn btn-secondary" id="saveBtn" title="Save to a .json file">💾 Save Project</button>
+      <button class="btn btn-secondary" id="openBtn" title="Open a saved project">📂 Open Project</button>
+      <button class="btn btn-secondary" id="beatsheetBtn" title="Import beatsheet from .fountain">🎼 Import Beatsheet</button>
+      <button class="btn btn-danger" id="clearBtn" title="Clear all cards">🧹 New / Clear Board</button>
+      <input type="file" id="openFile" accept=".json,application/json" style="display:none" />
+      <input type="file" id="beatsheetFile" accept=".fountain,text/plain" style="display:none" />
+    </div>
+
+    <div class="board" id="board">
+      <div class="canvas" id="canvas"></div>
+      <div class="empty-state" id="emptyState">
+        <div class="icon">📝</div>
+        <p style="font-size: 1.05rem; margin-bottom: 8px;">Create your first notecard to get started</p>
+        <p style="font-size: 0.9rem;">Try typing "INT. COFFEE SHOP - DAY" to see auto-formatting!</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      💡 Tip: Drag a card to see others animate and the dotted placeholder showing where it will snap. Any content line starting with "=" is highlighted and also listed as chips at the bottom of the card.
+    </div>
+  </div>
+
+   Edit Modal 
+  <div class="modal" id="editModal">
+    <div class="modal-content">
+      <div class="modal-header"><h3>Edit Notecard</h3></div>
+      <div class="modal-body">
+        <input type="text" id="editTitle" placeholder="Title">
+        <textarea id="editContent" placeholder="Content" rows="6"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="saveEdit">Save Changes</button>
+        <button class="btn btn-secondary" id="cancelEdit">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+   Color Picker 
+  <div class="color-picker" id="colorPicker">
+    <div class="color-picker-label">Card color</div>
+    <div class="color-option white"  data-color="white" title="White"></div>
+    <div class="color-option yellow" data-color="yellow" title="Yellow"></div>
+    <div class="color-option blue"   data-color="blue" title="Blue"></div>
+    <div class="color-option green"  data-color="green" title="Green"></div>
+    <div class="color-option pink"   data-color="pink" title="Pink"></div>
+    <div class="color-option purple" data-color="purple" title="Purple"></div>
+    <div class="color-option orange" data-color="orange" title="Orange"></div>
+    <div class="color-option red"    data-color="red" title="Red"></div>
+    <div class="color-option teal"   data-color="teal" title="Teal"></div>
+  </div>
+
+  <script>
+    class NotecardBoard {
+      constructor() {
+        // Grid config
+        this.padding = 24;
+        this.gapX = 24;
+        this.gapY = 24;
+        this.cardW = 260;
+        this.cardH = 180;
+
+        this.notecards = []; // array order defines grid order
+        this.draggedId = null;
+        this.dragFromIndex = null;
+        this.dragOffset = { x: 0, y: 0 };
+        this.dragTargetIndex = null; // where the card will snap to
+        this.cols = 4; // default cards per row
+
+        this.initElements();
+        this.bindEvents();
+        this.loadFromStorage();
+        this.updateUI();
+      }
+
+      initElements() {
+        this.board = document.getElementById('board');
+        this.canvas = document.getElementById('canvas');
+        this.titleInput = document.getElementById('titleInput');
+        this.contentInput = document.getElementById('contentInput');
+        this.addBtn = document.getElementById('addBtn');
+
+        this.exportBtn = document.getElementById('exportBtn');
+        this.saveBtn = document.getElementById('saveBtn');
+        this.openBtn = document.getElementById('openBtn');
+        this.beatsheetBtn = document.getElementById('beatsheetBtn');
+        this.openFileInput = document.getElementById('openFile');
+        this.beatsheetFileInput = document.getElementById('beatsheetFile');
+        this.clearBtn = document.getElementById('clearBtn');
+
+        this.emptyState = document.getElementById('emptyState');
+        this.editModal = document.getElementById('editModal');
+        this.editTitle = document.getElementById('editTitle');
+        this.editContent = document.getElementById('editContent');
+        this.colorPicker = document.getElementById('colorPicker');
+        this.projectTitleInput = document.getElementById('projectTitle');
+        this.colsInput = document.getElementById('colsInput');
+
+        // Drop indicator
+        this.dropIndicator = document.createElement('div');
+        this.dropIndicator.className = 'drop-indicator';
+        this.canvas.appendChild(this.dropIndicator);
+      }
+
+      bindEvents() {
+        // Init cols input
+        this.colsInput.value = String(this.cols);
+        this.colsInput.addEventListener('input', () => {
+          const v = Math.max(1, Math.min(12, parseInt(this.colsInput.value || '4', 10)));
+          this.cols = isNaN(v) ? 4 : v;
+          this.colsInput.value = String(this.cols);
+          this.saveCols();
+          this.updateUI();
+        });
+
+        // Title input (card): live auto-caps + add enable
+        this.titleInput.addEventListener('input', () => {
+          const v = this.titleInput.value;
+          const formatted = this.formatTitle(v);
+          if (formatted !== v) {
+            const pos = this.titleInput.selectionStart;
+            this.titleInput.value = formatted;
+            try { this.titleInput.setSelectionRange(pos, pos); } catch {}
+          }
+          this.updateAddButton();
+        });
+        this.titleInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.createNotecard(); });
+
+        this.addBtn.addEventListener('click', () => this.createNotecard());
+        this.exportBtn.addEventListener('click', () => this.exportToFountain());
+
+        // Save / Open / Clear / Beatsheet
+        this.saveBtn.addEventListener('click', () => this.saveProjectToFile());
+        this.openBtn.addEventListener('click', () => this.openFileInput.click());
+        this.beatsheetBtn.addEventListener('click', () => this.beatsheetFileInput.click());
+        this.openFileInput.addEventListener('change', (e) => this.openProjectFile(e));
+        this.beatsheetFileInput.addEventListener('change', (e) => this.importBeatsheetFile(e));
+        this.clearBtn.addEventListener('click', () => this.clearBoard());
+
+        // Edit modal
+        document.getElementById('saveEdit').addEventListener('click', () => this.saveEdit());
+        document.getElementById('cancelEdit').addEventListener('click', () => this.closeEditModal());
+        this.editModal.addEventListener('click', (e) => { if (e.target === this.editModal) this.closeEditModal(); });
+
+        // Color picker options
+        document.querySelectorAll('.color-option').forEach(option => {
+          option.addEventListener('click', (e) => {
+            const color = e.target.dataset.color;
+            if (this.colorPickerCard) {
+              this.changeCardColor(this.colorPickerCard, color);
+              this.hideColorPicker();
+            }
+          });
+        });
+        // Close color picker when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!this.colorPicker.contains(e.target) && !e.target.closest('.icon-btn')) {
+            this.hideColorPicker();
+          }
+        });
+
+        // Board mouse events for dragging
+        this.board.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.board.addEventListener('mouseup', () => this.handleMouseUp());
+        this.board.addEventListener('mouseleave', () => this.handleMouseUp());
+
+        // Project title persistence
+        this.projectTitleInput.addEventListener('input', () => this.saveProjectTitle());
+
+        // Reflow when board resizes
+        window.addEventListener('resize', () => this.updateUI());
+      }
+
+      // Auto-caps scene headings
+      formatTitle(title) {
+        const lower = title.toLowerCase();
+        if (lower.startsWith('int.') || lower.startsWith('ext.') || lower.startsWith('i/e.')) {
+          return title.toUpperCase();
+        }
+        return title;
+      }
+
+      updateAddButton() {
+        const hasTitle = this.titleInput.value.trim().length > 0;
+        this.addBtn.disabled = !hasTitle;
+      }
+
+      createNotecard() {
+        const rawTitle = this.titleInput.value.trim();
+        if (!rawTitle) return;
+
+        const notecard = {
+          id: Date.now().toString(),
+          title: this.formatTitle(rawTitle),
+          content: this.contentInput.value,
+          color: 'white' // default to white
+        };
+
+        // Append to end (next slot)
+        this.notecards.push(notecard);
+        this.titleInput.value = '';
+        this.contentInput.value = '';
+        this.updateAddButton();
+        this.saveToStorage();
+        this.updateUI();
+      }
+
+      deleteNotecard(id) {
+        this.notecards = this.notecards.filter(card => card.id !== id);
+        this.saveToStorage();
+        this.updateUI();
+      }
+
+      changeCardColor(id, color) {
+        const card = this.notecards.find(c => c.id === id);
+        if (card) {
+          card.color = color;
+          this.saveToStorage();
+          this.updateUI();
+        }
+      }
+
+      showEditModal(card) {
+        this.editingCard = card;
+        this.editTitle.value = card.title;
+        this.editContent.value = card.content;
+        this.editModal.classList.add('show');
+      }
+
+      closeEditModal() {
+        this.editModal.classList.remove('show');
+        this.editingCard = null;
+      }
+
+      saveEdit() {
+        if (!this.editingCard) return;
+        this.editingCard.title = this.formatTitle(this.editTitle.value);
+        this.editingCard.content = this.editContent.value;
+        this.saveToStorage();
+        this.updateUI();
+        this.closeEditModal();
+      }
+
+      showColorPicker(cardId, buttonElement) {
+        this.colorPickerCard = cardId;
+        const rect = buttonElement.getBoundingClientRect();
+        this.colorPicker.style.left = rect.left + 'px';
+        this.colorPicker.style.top = (rect.bottom + 5) + 'px';
+        this.colorPicker.classList.add('show');
+      }
+
+      hideColorPicker() {
+        this.colorPicker.classList.remove('show');
+        this.colorPickerCard = null;
+      }
+
+      /* Dragging and snapping with live animation */
+      handleMouseDown(e, cardId) {
+        const cardEl = this.canvas.querySelector(`[data-id="${cardId}"]`);
+        if (!cardEl) return;
+        const rect = cardEl.getBoundingClientRect();
+
+        this.draggedId = cardId;
+        this.dragFromIndex = this.notecards.findIndex(c => c.id === cardId);
+        this.dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        cardEl.classList.add('dragging');
+
+        // show drop indicator at current slot
+        const { left, top } = this.positionForIndex(this.dragFromIndex);
+        this.dropIndicator.style.left = left + 'px';
+        this.dropIndicator.style.top = top + 'px';
+        this.dropIndicator.classList.add('show');
+      }
+
+      handleMouseMove(e) {
+        if (!this.draggedId) return;
+
+        const cardEl = this.canvas.querySelector(`[data-id="${this.draggedId}"]`);
+        if (!cardEl) return;
+
+        const boardRect = this.board.getBoundingClientRect();
+        const x = e.clientX - boardRect.left + this.board.scrollLeft - this.dragOffset.x;
+        const y = e.clientY - boardRect.top + this.board.scrollTop - this.dragOffset.y;
+
+        // Clamp within canvas bounds
+        const maxX = Math.max(0, (this.canvas.scrollWidth || this.canvas.clientWidth) - this.cardW);
+        const maxY = Math.max(0, (this.canvas.scrollHeight || this.canvas.clientHeight) - this.cardH);
+        const clampedX = Math.max(0, Math.min(x, maxX));
+        const clampedY = Math.max(0, Math.min(y, maxY));
+
+        // Move dragged element with pointer (no transition snap)
+        cardEl.style.left = clampedX + 'px';
+        cardEl.style.top = clampedY + 'px';
+
+        // Compute target index (allow placing at end)
+        const indexByPoint = this.pointToIndex(e.clientX, e.clientY, true);
+        this.dragTargetIndex = indexByPoint;
+
+        // Move drop indicator to target slot
+        const targetPos = this.positionForIndex(this.dragTargetIndex);
+        this.dropIndicator.style.left = targetPos.left + 'px';
+        this.dropIndicator.style.top = targetPos.top + 'px';
+
+        // Animate other cards into their would-be positions
+        this.layoutDuringDrag();
+      }
+
+      handleMouseUp() {
+        if (!this.draggedId) return;
+
+        const fromIndex = this.dragFromIndex;
+        let toIndex = this.dragTargetIndex;
+
+        if (typeof toIndex !== 'number') {
+          toIndex = fromIndex;
+        }
+
+        toIndex = Math.max(0, Math.min(this.notecards.length - 1, toIndex));
+
+        if (fromIndex !== -1 && toIndex !== fromIndex) {
+          const [moved] = this.notecards.splice(fromIndex, 1);
+          this.notecards.splice(toIndex, 0, moved);
+          this.saveToStorage();
+        }
+
+        // Reset dragging state
+        const cardEl = this.canvas.querySelector(`[data-id="${this.draggedId}"]`);
+        if (cardEl) cardEl.classList.remove('dragging');
+        this.draggedId = null;
+        this.dragFromIndex = null;
+        this.dragTargetIndex = null;
+        this.dropIndicator.classList.remove('show');
+
+        // Snap everyone to their true positions
+        this.updateUI();
+      }
+
+      // While dragging: reposition non-dragged cards to "ghost" positions around the target
+      layoutDuringDrag() {
+        const from = this.dragFromIndex;
+        const to = this.dragTargetIndex;
+        if (from == null || to == null) return;
+
+        this.notecards.forEach((card, i) => {
+          if (i === from) return; // dragged is free
+
+          // compute display index if dragged were inserted at 'to'
+          let displayIndex = i;
+          if (to > from) {
+            if (i > from && i <= to) displayIndex = i - 1;
+          } else if (to < from) {
+            if (i >= to && i < from) displayIndex = i + 1;
+          }
+
+          const el = this.canvas.querySelector(`[data-id="${card.id}"]`);
+          if (el) {
+            const { left, top } = this.positionForIndex(displayIndex);
+            el.style.left = left + 'px';
+            el.style.top = top + 'px';
+          }
+        });
+      }
+
+      // Map a pointer to a grid index
+      pointToIndex(clientX, clientY, allowEnd = true) {
+        const rect = this.board.getBoundingClientRect();
+        const x = clientX - rect.left + this.board.scrollLeft - this.padding;
+        const y = clientY - rect.top + this.board.scrollTop - this.padding;
+
+        const col = Math.max(0, Math.min(this.cols - 1, Math.floor(x / (this.cardW + this.gapX))));
+        const row = Math.max(0, Math.floor(y / (this.cardH + this.gapY)));
+        let index = row * this.cols + col;
+
+        const maxIndex = allowEnd ? Math.max(0, this.notecards.length - 1) : Math.max(0, this.notecards.length - 1);
+        if (!Number.isFinite(index)) index = maxIndex;
+        return Math.max(0, Math.min(index, maxIndex));
+      }
+
+      // Compute card position from its index in array
+      positionForIndex(i) {
+        const col = i % this.cols;
+        const row = Math.floor(i / this.cols);
+        const left = this.padding + col * (this.cardW + this.gapX);
+        const top = this.padding + row * (this.cardH + this.gapY);
+        return { left, top };
+      }
+
+      // Ensure canvas is large enough for current rows/cols
+      resizeCanvas() {
+        const rows = Math.max(1, Math.ceil(this.notecards.length / this.cols));
+        const width = this.padding * 2 + this.cols * this.cardW + (this.cols - 1) * this.gapX;
+        const height = this.padding * 2 + rows * this.cardH + (rows - 1) * this.gapY;
+        this.canvas.style.width = width + 'px';
+        this.canvas.style.height = height + 'px';
+      }
+
+      exportToFountain() {
+        let content = '';
+        const projectTitle = (this.projectTitleInput.value || '').trim();
+        if (projectTitle) {
+          content += 'Title: ' + projectTitle + '\n';
+        }
+        content += 'Draft date: ' + new Date().toLocaleDateString() + '\n\n';
+
+        // Use current array order (left-to-right, top-to-bottom by design)
+        this.notecards.forEach(card => {
+          content += card.title + '\n\n';
+          if (card.content) content += card.content + '\n';
+          content += '\n';
+        });
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (projectTitle ? this.sanitizeFilename(projectTitle) : 'screenplay-notes') + '.fountain';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      // Save to external JSON file
+      saveProjectToFile() {
+        const project = {
+          version: 4,
+          projectTitle: this.projectTitleInput.value || '',
+          cols: this.cols,
+          notecards: this.notecards,
+          savedAt: new Date().toISOString()
+        };
+        const json = JSON.stringify(project, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const name = (project.projectTitle ? this.sanitizeFilename(project.projectTitle) : 'notecard-board') + '.json';
+        a.href = url; a.download = name; a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      // Open from external JSON file
+      openProjectFile(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(reader.result);
+            if (!data || !Array.isArray(data.notecards)) throw new Error('Invalid file format');
+            this.projectTitleInput.value = data.projectTitle || '';
+            this.cols = Number.isFinite(data.cols) && data.cols >= 1 ? data.cols : (this.cols || 4);
+            this.colsInput.value = String(this.cols);
+            this.notecards = data.notecards.map(c => ({
+              id: String(c.id || Date.now() + Math.random()),
+              title: typeof c.title === 'string' ? c.title : '',
+              content: typeof c.content === 'string' ? c.content : '',
+              color: ['white','yellow','blue','green','pink','purple','orange','red','teal'].includes(c.color) ? c.color : 'white'
+            }));
+            this.saveToStorage();
+            this.updateUI();
+          } catch (err) {
+            alert('Could not open project. Make sure you selected a valid project JSON file.');
+            console.error('Open project error:', err);
+          } finally {
+            e.target.value = ''; // allow opening the same file again
+          }
+        };
+        reader.onerror = () => {
+          alert('Failed to read the selected file.');
+          e.target.value = '';
+        };
+        reader.readAsText(file);
+      }
+
+      // Import beatsheet from Fountain file: each heading (#, ##, ###, ...) becomes a card
+      importBeatsheetFile(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const text = String(reader.result || '');
+            const newCards = this.parseBeatsheet(text);
+            if (newCards.length === 0) {
+              alert('No headings (#) found in this Fountain file.');
+              return;
+            }
+
+            const clear = confirm('Clear existing cards before importing?\nOK = Clear and import\nCancel = Append to current board');
+            if (clear) this.notecards = [];
+
+            newCards.forEach((c) => {
+              this.notecards.push({
+                id: (Date.now() + Math.random()).toString(),
+                title: this.formatTitle(c.title),
+                content: c.content,
+                color: 'white'
+              });
+            });
+
+            this.saveToStorage();
+            this.updateUI();
+          } catch (err) {
+            alert('Could not import beatsheet. Make sure you selected a valid Fountain (.fountain) file.');
+            console.error('Beatsheet import error:', err);
+          } finally {
+            e.target.value = ''; // allow importing same file again
+          }
+        };
+        reader.onerror = () => {
+          alert('Failed to read the selected file.');
+          e.target.value = '';
+        };
+        reader.readAsText(file);
+      }
+
+      // Parse headings (# ... ######) with content until the next heading
+      parseBeatsheet(text) {
+        const lines = text.replace(/\r\n?/g, '\n').split('\n');
+        const cards = [];
+        let currentTitle = null;
+        let contentLines = [];
+
+        const pushCard = () => {
+          if (currentTitle !== null) {
+            const content = contentLines.join('\n').trim();
+            cards.push({ title: currentTitle.trim(), content });
+          }
+        };
+
+        for (const raw of lines) {
+          const line = raw;
+          const m = line.match(/^\s*#{1,6}\s*(.+?)\s*$/);
+          if (m) {
+            pushCard();
+            currentTitle = m[1];
+            contentLines = [];
+          } else {
+            if (currentTitle !== null) contentLines.push(line);
+          }
+        }
+        pushCard();
+
+        return cards;
+      }
+
+      // Extract marker lines (start with "=")
+      extractMarkers(text) {
+        if (!text) return [];
+        return text.split(/\r?\n/).filter(l => l.trim().startsWith('=')).map(l => l.replace(/^=\s*/, '').trim()).filter(Boolean);
+      }
+
+      // Render content HTML with highlighted marker lines
+      renderContentHTML(text) {
+        if (!text) return '';
+        const lines = text.split(/\r?\n/);
+        const html = lines.map(line => {
+          const isMarker = line.trim().startsWith('=');
+          const safe = this.escapeHtml(line.replace(/^=\s*/, '= ')); // keep a single '=' visually
+          return `<div class="content-line${isMarker ? ' marker-line' : ''}">${safe}</div>`;
+        }).join('');
+        return html;
+      }
+
+      // Clear everything and start fresh
+      clearBoard() {
+        const confirmed = confirm('This will clear all cards and the current title. Continue?');
+        if (!confirmed) return;
+        this.notecards = [];
+        this.projectTitleInput.value = '';
+        this.saveToStorage();
+        this.updateUI();
+      }
+
+      // Storage
+      saveProjectTitle() {
+        localStorage.setItem('screenplay-project-title', this.projectTitleInput.value || '');
+      }
+      saveCols() {
+        localStorage.setItem('screenplay-cols', String(this.cols));
+      }
+      saveToStorage() {
+        localStorage.setItem('screenplay-notecards', JSON.stringify(this.notecards));
+        this.saveProjectTitle();
+        this.saveCols();
+      }
+      loadFromStorage() {
+        const savedCards = localStorage.getItem('screenplay-notecards');
+        if (savedCards) {
+          try { this.notecards = JSON.parse(savedCards) || []; } catch (e) { console.error('Load cards error:', e); }
+        }
+        const savedTitle = localStorage.getItem('screenplay-project-title');
+        if (savedTitle !== null) this.projectTitleInput.value = savedTitle;
+
+        const savedCols = localStorage.getItem('screenplay-cols');
+        if (savedCols) {
+          const n = parseInt(savedCols, 10);
+          if (Number.isFinite(n) && n >= 1) this.cols = n;
+        }
+        this.colsInput.value = String(this.cols);
+      }
+
+      updateUI() {
+        // Resize canvas for rows/cols
+        this.resizeCanvas();
+
+        // Clear existing cards
+        this.canvas.querySelectorAll('.notecard').forEach(card => card.remove());
+
+        // Show/hide empty state and enable export
+        this.emptyState.style.display = this.notecards.length === 0 ? 'block' : 'none';
+        this.exportBtn.disabled = this.notecards.length === 0;
+
+        // Render cards (position by index -> uniform grid)
+        this.notecards.forEach((card, i) => {
+          const { left, top } = this.positionForIndex(i);
+          const cardElement = this.createCardElement(card);
+          cardElement.style.left = left + 'px';
+          cardElement.style.top = top + 'px';
+          this.canvas.appendChild(cardElement);
+        });
+      }
+
+      createCardElement(card) {
+        const div = document.createElement('div');
+        div.className = `notecard color-${card.color}`;
+        div.dataset.id = card.id;
+
+        // Build markers and content
+        const markers = this.extractMarkers(card.content);
+        const contentHTML = this.renderContentHTML(card.content);
+
+        div.innerHTML = `
+          <div class="notecard-header">
+            <div class="notecard-title">${this.escapeHtml(card.title)}</div>
+            <div class="notecard-actions">
+              <button class="icon-btn palette-btn" title="Change color">🎨</button>
+              <button class="icon-btn edit-btn" title="Edit">✏️</button>
+              <button class="icon-btn delete" title="Delete">❌</button>
+            </div>
+          </div>
+          ${card.content ? `<div class="notecard-content">${contentHTML}</div>` : '<div class="notecard-content"></div>'}
+          ${markers.length ? `<div class="markers">${markers.map(m => `<span class="marker-pill">${this.escapeHtml(m)}</span>`).join('')}</div>` : ''}
+        `;
+
+        // Drag start
+        div.addEventListener('mousedown', (e) => {
+          if (!e.target.closest('.icon-btn')) this.handleMouseDown(e, card.id);
+        });
+
+        // Actions
+        div.querySelector('.palette-btn').addEventListener('click', (e) => {
+          e.stopPropagation(); this.showColorPicker(card.id, e.target);
+        });
+        div.querySelector('.edit-btn').addEventListener('click', (e) => {
+          e.stopPropagation(); this.showEditModal(card);
+        });
+        div.querySelector('.delete').addEventListener('click', (e) => {
+          e.stopPropagation(); this.deleteNotecard(card.id);
+        });
+
+        return div;
+      }
+
+      sanitizeFilename(name) {
+        return String(name).replace(/[\\/:*?"<>|]/g, '_').trim() || 'project';
+      }
+
+      escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text ?? '';
+        return div.innerHTML;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { new NotecardBoard(); });
+  </script>
+</body>
+</html>
